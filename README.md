@@ -92,6 +92,23 @@ for every design tier alike). Design differentiation is a benefit you get in a
 clean experiment, not a rescue for a noisy one.
 (`notebooks/ambisim/01c_droplet_ambient_stratified_llgap.ipynb`)
 
+**4b. Splitting the pooled *accuracy* correlation by ambient bin doesn't rescue
+it for GEX, but partially does for ATAC.** If the pooled null GEX accuracy
+result (point 1) were purely an artifact of averaging a real low-ambient
+effect against a swamped high-ambient one, per-bin accuracy-vs-`min_dist`
+correlations should look like the LL-gap pattern above. They don't, for GEX:
+only one of 5 bins reaches even marginal significance (10-20%: r=0.365,
+p=0.04 — doesn't survive correction for the 10 bin×modality tests run), and
+higher-ambient bins trend slightly negative. ATAC is different: real signal
+recovers in some non-ceiling bins (10-20%: r=0.593, p<0.001; 30-40%: r=0.443,
+p=0.011). So this sharpens rather than resolves the GEX/ATAC split — ATAC's
+pooled accuracy correlation (point 1) looks like a real, if ambient-band-
+dependent, effect, while GEX's near-null result holds up across the whole
+ambient range, not just at the ceiling. Plausible reason: ATAC pileups carry
+far more informative SNPs/reads per cell (~3x larger raw LL-gaps than GEX),
+giving design more room to move a thresholded call, not just the continuous
+margin.
+
 ## Commentary — does pool design matter?
 
 Not "no" — the honest read at this snapshot is **"not yet shown on accuracy,
