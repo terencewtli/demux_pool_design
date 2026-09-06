@@ -37,21 +37,49 @@ Each cell (universe × strategy) has 3 replicates; the full design is 132 pools
 completed demuxlet on both modalities** — all rep1 of the core grid (no
 adversarial pools have been simulated yet).
 
-## Bug found and fixed during this analysis
+## `greedy_maxkl` is buggy/weird — treat all its results as unreliable for now
+
+**Status: partially fixed, still broken, deprioritized rather than resolved.**
+Do not use `greedy_maxkl` pools (including the regenerated ones described
+below) as a valid "good design" data point until this is actually resolved.
 
 `nominate_greedy_maxkl`'s inner KL computation added its numerical-stability
 epsilon *before* taking the complement probability (`1 - p`), so any
 homozygous-alt site (dosage=2 → p=1.0) produced `1 - p < 0` and
 `log(negative) = NaN`, silently corrupting the greedy argmax every time it hit
-a common homozygous site. This is why the 3 `greedy_maxkl` pools already
+a common homozygous site. This is why the 3 `greedy_maxkl` pools originally
 simulated scored at or below `random` on their own target metric (`kl_min`) —
 the nomination loop wasn't actually optimizing anything. Fixed in
-`pool_nomination.py` (verified: post-fix, `greedy_maxkl` now converges to the
-same pool as `greedy_maxmin` on a smoke test, as expected given `kl_min` and
-`min_dist` are r=0.999 collinear in this data — see below). **The 3 already-run
-`greedy_maxkl` pools (AMR_only, EUR_only, SAS_only, rep1) reflect the buggy
-selection and should be re-nominated and re-simulated**, not treated as valid
-`greedy_maxkl` data points.
+`pool_nomination.py` (confirmed: no more NaN/divide-by-zero warnings post-fix).
+
+**But re-running the (fixed) nomination across all 5 single-ancestry
+universes shows the bug wasn't the whole story.** Re-nominated canonical
+(best-of-5-seed) `kl_min` values — AFR_only 1.738, AMR_only 1.702, EAS_only
+1.498, EUR_only 1.639, SAS_only 1.799 — are **still below that universe's
+`random` baseline in every single case** (random: 1.851, 1.725, 1.675, 1.773,
+1.880 respectively), just by a smaller margin than the pre-fix version. So
+`greedy_maxkl`, even after the NaN fix, still doesn't demonstrably achieve
+what its name claims (a pool that maximizes minimum pairwise KL divergence).
+The search-time objective (`kl_to_pool`) and the scoring function
+(`pool_kl_divergence`) were checked and now use consistent epsilon-handling,
+so this isn't simply a scoring/search mismatch — root cause not identified.
+Possibly a genuine property of greedy max-min search being more prone to
+local-optimum traps for a KL-shaped objective than for Euclidean distance
+(`greedy_maxmin`, using the same greedy structure, reliably beats `random` by
+a wide margin) — or a subtler remaining bug not yet isolated.
+
+**Decision: deprioritized, not resolved.** Given `kl_min`/`min_dist` are
+r=0.999 collinear in this design space anyway, `greedy_maxmin` already serves
+the "good design by genetic separation" comparator role, and the adversarial
+pools are a far higher-value use of remaining compute for the paper's actual
+question. Donor lists were regenerated with the fixed code
+(`txt/donors/*greedy_maxkl*rep1.txt`, backups of the pre-fix
+`nominated_pools_n8.tsv`/`simulation_pools_n8.tsv` kept alongside), but **the
+3 already-simulated `greedy_maxkl` pools (AMR_only, EUR_only, SAS_only, rep1)
+have deliberately not been deleted/re-simulated** — there was no point
+spending ~20h/pool of compute regenerating a strategy that still isn't
+working as intended. Treat every `greedy_maxkl` result in this repo
+(pre- or post-fix) as unreliable until this is actually root-caused.
 
 ## Results so far (n=32 pools, rep1 only, no adversarial floor yet)
 
