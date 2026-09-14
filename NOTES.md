@@ -203,6 +203,33 @@ different signal among unrelated donors when allowed to vary independently).
   built, not evidence the project's underlying question is unanswerable or that the accuracy
   null result (`README.md`) is unsound — that result doesn't depend on min/mean separation.
 
+**Methodology of the fix itself, and a real limitation found and patched in it (2026-09-14):**
+`C(525,8) ≈ 1.36e17` possible `EUR_only` pools — the 20,000-draw search samples ~1.5e-13 of that
+space, nowhere near exhaustive. It finds "reasonably extreme relative to a modest random
+sample," not the global extreme, and the two quadrants converge very differently: re-running the
+search at 1K/5K/20K/50K/200K draws shows `highmin_lowmean`'s achieved `min_dist` converges
+smoothly and is already near-final at 20K (103.19 → 103.42 over 10x more draws — there's a
+natural ceiling on how spread out 8 people can be). `lowmin_highmean` is heavier-tailed: a
+diagnostic run (different seed than the actual pools) found `min_dist` jumping to 45.4 somewhere
+around 20K draws and holding there through 200K — well below the real `adversarial_family`
+pedigree pairs' 74-77 range, meaning naive extremal search on the "how close can two `unrelated`
+people be" question risks surfacing a cryptic-relatedness pair the panel's `unrelated` flag
+missed, not a genuinely coincidental close pair. **The actual generated pools are fine** — their
+seeds (200001/200002, not the diagnostic seed) landed at min_dist=80.6/87.2, and I verified both
+closest pairs (`HG00116`/`HG00120`, `HG00240`/`HG00238`) are flagged `unrelated=True` in `meta`
+— but the script had no safeguard against this, so one was added: it now asserts the closest
+pair in each selected pool is flagged unrelated and warns if their distance drops below 70
+(approaching the real pedigree range), so a future rerun with more candidates or a different
+universe can't silently turn a "control" pool into an accidental adversarial one.
+
+Also worth being explicit about: the median-split design (below/above-median `mean_dist`, then
+`max()`/`min()` `min_dist` within that half) is a reasonable default, not a proven-optimal one.
+A stricter percentile cutoff (e.g. bottom quartile of `mean_dist`) would sharpen separation on
+the constrained axis but shrinks the candidate pool available for the extremal search on the
+target axis — extreme order statistics need a large sample to find a good tail value. This
+tradeoff wasn't optimized, just chosen as the simplest 50/50 split that keeps the full 20,000
+candidates available for the search.
+
 **Why does random sampling correlate min_dist/mean_dist at all (r=0.54), given 525 candidates
 to draw from?** Not a sample-size effect — checked directly. `min_dist` vs. the mean of the
 *other 27 pairs* (excluding the min pair itself): r=0.494, barely lower than r=0.536 including

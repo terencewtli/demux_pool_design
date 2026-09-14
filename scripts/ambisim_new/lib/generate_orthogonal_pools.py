@@ -102,6 +102,26 @@ def main():
             ('highmin_lowmean', best_hilo), ('lowmin_highmean', best_lohi)
         ]:
             pool = list(pool_arr)
+
+            # Safeguard added after a diagnostic run (not this one) found that pushing
+            # N_CANDIDATES higher can surface a pair as close as min_dist~45 -- well below
+            # the real adversarial_family pedigree pairs (~74-77) -- suggesting cryptic
+            # relatedness the panel's 'unrelated' flag didn't catch, not genuine coincidence
+            # among unrelated people. Verify the closest pair in THIS pool is (a) flagged
+            # unrelated in meta and (b) not implausibly close, so a "control" pool doesn't
+            # silently become an accidental adversarial one.
+            sub = D[np.ix_(pool, pool)]
+            np.fill_diagonal(sub, np.inf)
+            ci, cj = np.unravel_index(sub.argmin(), sub.shape)
+            pair = (sample_ids[pool[ci]], sample_ids[pool[cj]])
+            pair_dist = sub[ci, cj]
+            for pid in pair:
+                is_unrelated = meta.loc[meta['SampleID'] == pid, 'unrelated'].iloc[0]
+                assert is_unrelated, f'{pid} in {quadrant}_new rep{rep} closest pair is not flagged unrelated!'
+            if pair_dist < 70:
+                print(f'  WARNING: {quadrant}_new rep{rep} closest pair {pair} at {pair_dist:.1f} '
+                      f'is close to the real adversarial_family pedigree range (~74-77) -- '
+                      f'double check this isn\'t cryptic relatedness before using it as a control.')
             pool_name = f'{UNIVERSE}__{quadrant}_new__rep{rep}'
             m = score_pool(pool, D, X)
             rows.append({'universe': UNIVERSE, 'quadrant': quadrant, 'rep': rep,
