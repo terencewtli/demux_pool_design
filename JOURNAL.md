@@ -106,6 +106,23 @@ the one selection decision demonstrated to move accuracy, and it's a different k
 the full mechanism (including the correction), `00_pool_geometry_qc.ipynb` for the QC itself,
 then `qstat` for both mini-experiments' status.
 
+**Follow-up same session (user questions after the above landed):**
+- **Why does random sampling correlate min_dist/mean_dist at all (r=0.54)?** Not underpowering
+  — `min_dist` vs. mean of the *other 27 pairs* (excluding the min pair itself) is still r=0.494,
+  and `min_dist` vs. the *second*-smallest distance in the same draw is r=0.72. A random draw's
+  "tightness" is a property of the whole 8-person set, not per-pair noise — added to `NOTES.md`.
+- **Per-donor localization of the adversarial-pool effect, split by pool's own distance
+  matrix**: `adversarial_family` degradation is sharply localized to donors with a relative in
+  the pool (GEX LL-gap 4.79 at-risk vs. 7.66 safe donor, same pool; ATAC 13.83 vs. 24.71).
+  `adversarial_mindist`'s closest pair is barely distinguishable from the rest of its own pool
+  (GEX 7.24 vs. 7.48; ATAC 23.14 vs. 23.16) — consistent with `nominate_greedy_mindist`
+  uniformly compressing the whole pool's geometry (minimizes *max* distance to the pool at each
+  greedy step) rather than embedding one bad pair. Added to `README.md` point 1.
+- **Recommended path forward, not yet executed**: don't redo the ~54 existing
+  `greedy_maxmin`/`greedy_maxmean` pools under the new orthogonal scheme preemptively (13x the
+  4-pool pilot's compute) — let the pilot land first and decide from there. Full reasoning in
+  `NOTES.md`.
+
 ---
 
 ## 2026-09-14 — root-caused the OOM-killed demuxlet calls, reran 01a-01d at n=88, first accuracy signal

@@ -60,6 +60,22 @@ shows a smaller version of the same gap (p=0.002-0.005, mean diff as small as
 +0.004 ATAC) despite `min_dist` values overlapping ordinary pools — thin
 evidence, not yet a settled result.
 
+**The degradation mechanism differs between the two adversarial types, and this
+matters for interpretation.** Splitting each pool's own cells by donor (using
+each pool's actual distance matrix, not guessing) shows the family/family_mixed
+effect is sharply *localized*: donors with a close relative in the same pool
+score far worse than the unrelated "fill" donors sitting in the identical
+experiment (GEX LL-gap 4.79 at-risk vs. 7.66 safe; ATAC 13.83 vs. 24.71 — a
+35-45% margin gap between donors in the same pool). `adversarial_mindist`
+shows the opposite pattern: the single closest pair in each pool is barely
+distinguishable from the rest of that same pool (GEX LL-gap 7.24 vs. 7.48;
+ATAC 23.14 vs. 23.16 — essentially no difference). Mechanistically this makes
+sense: `adversarial_family` embeds one genuinely tight relative cluster inside
+an otherwise-normal pool, while `adversarial_mindist`'s greedy construction
+(minimize the *max* distance to the current pool at each step) compresses the
+whole pool's geometry uniformly, so there's no single "bad pair" to point
+to — which is also likely why its accuracy effect is the weaker of the two.
+
 **Classifier margin (LL-gap) is the one design signal that holds up.**
 `min_dist` vs. mean LL-gap, ordinary pools only: r=0.31 (GEX), r=0.31 (ATAC),
 both p<0.01 — smaller than the naive whole-sample r=0.66-0.73 but real, and it

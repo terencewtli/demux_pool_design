@@ -202,3 +202,35 @@ different signal among unrelated donors when allowed to vary independently).
 - This is a fixable methodology gap specific to how `min_dist`/`mean_dist` design pools are
   built, not evidence the project's underlying question is unanswerable or that the accuracy
   null result (`README.md`) is unsound — that result doesn't depend on min/mean separation.
+
+**Why does random sampling correlate min_dist/mean_dist at all (r=0.54), given 525 candidates
+to draw from?** Not a sample-size effect — checked directly. `min_dist` vs. the mean of the
+*other 27 pairs* (excluding the min pair itself): r=0.494, barely lower than r=0.536 including
+it. `min_dist` vs. the *second*-smallest pairwise distance in the same draw: r=0.72. This means
+whether a random 8-person draw is "tight" or "spread out" is a property of the whole set, not
+independent per-pair noise: population genetic-distance space isn't uniformly dense, so a draw
+that happens to land 2 people in a locally dense pocket tends to have several other reduced
+pairwise distances too (not just that one pair), which drags both the minimum and the mean down
+together. A huge candidate panel doesn't prevent this — it's geometry, not scarcity.
+
+**Are the ~54 existing `greedy_maxmin`/`greedy_maxmean` pools (across all 9 universes) now
+useless?** No, but their role is narrower than originally intended. Still valid for: the
+`random`-vs-any-optimized-strategy comparison (doesn't depend on separating min from mean) and
+the continuous distance-vs-margin regression (their real, achieved `min_dist`/`mean_dist` values
+still contribute genuine variance there — this is how the r≈0.31 non-adversarial LL-gap
+correlation was estimated). Not valid for: isolating whether *worst-case* optimization matters
+more than *average-case* optimization specifically — that comparison needs the two conditions
+to actually differ, which they mostly don't. Don't discard this data; just don't cite it for
+that one narrower claim.
+
+**Recommended path forward (not yet decided/executed beyond the 4-pool pilot above):** don't
+redo all ~54 pools under the new scheme preemptively — each is a full ambisim→cellranger-arc→
+demuxlet run (~13x the pilot's compute). Sequence: (1) let the 4-pool `EUR_only` pilot land
+first; (2) if `highmin_lowmean` and `lowmin_highmean` pools show a real, different LL-gap/
+accuracy signal from each other, that's the first evidence in this project that `min_dist`
+specifically (not distance in general) matters, and scaling up (more universes, plus the
+`highmin_highmean`/`lowmin_lowmean` quadrants for a full 2x2 grid) is well justified; (3) if
+the pilot shows nothing, that's still a cheap, useful result — it would mean the min/mean
+distinction was never the story either, and the compute is better spent on the Tier-3
+downsampling check, which is more likely to be decisive for the paper's actual accuracy
+question.
