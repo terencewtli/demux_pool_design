@@ -19,6 +19,95 @@ Entry template:
 
 ---
 
+## 2026-09-14 (later same day) — min_dist/mean_dist entanglement found, fixed, n=16 and orthogonal-sampling mini-experiments launched
+
+**State at start:** n=88 results committed and pushed (see entry below). User asked a follow-up
+about `min_dist` vs. `mean_dist` magnitude and whether the two objectives could be picking the
+same donors "by coincidence."
+
+**Investigation 1 — they do, substantially:**
+- Donor overlap between `greedy_maxmin`/`greedy_maxmean` for the same universe/rep: median 5-6
+  of 8 donors identical (checked all 15 single-ancestry + 12 multi-ancestry combinations).
+  Two causes: both `nominate_greedy_*` use the same RNG seed per rep (guaranteed identical
+  first donor), and more fundamentally both are the same greedy point-repulsion algorithm, so
+  an outlier far by one criterion is usually far by the other too from the same candidate pool.
+- `min_dist`/`mean_dist` correlate at r=0.69-0.84 across the 88 simulated pools (non-adversarial).
+- Real 10x data (63 pools, `demux_benchmark/pool_design/csv/50_line/pool_genetic_dists.csv`):
+  r=0.14 (n.s.) — far more independent. Mechanism confirmed: real `mean_dist` tracks each pool's
+  EUR/AFR ancestry ratio almost deterministically (r=-0.91), `min_dist` doesn't (r=-0.16) — a
+  population-average statistic and an extremal/order statistic have no reason to move together
+  unless the construction procedure forces them to.
+
+**Investigation 2 — an error in investigation 1, caught while building the QC notebook:** first
+pass claimed `random` pools decouple the two metrics (r=-0.09) "matching real data almost
+exactly," based on only 7 actually-simulated `random` pools — not enough power to trust. A
+properly-powered check (20,000 genuine random draws, `00_pool_geometry_qc.ipynb`) gives
+**r=0.536**, a real, moderate, unavoidable baseline correlation from pairwise-distance order
+statistics, not zero. Corrected picture: real data r=0.14 < random draws r=0.54 < greedy
+r=0.69-0.84. Same small-n-correlation trap flagged for the adversarial-pool leverage check
+earlier — worth internalizing as a standing rule for this repo, not just a one-off fix.
+
+**Decision and fix implemented:** built `scripts/ambisim_new/lib/generate_orthogonal_pools.py`
+— rejection sampling on top of random draws (not a third greedy variant): draw 20,000 random
+8-donor pools per rep (distance-matrix lookup only, no simulation, ~5s), then keep the ones
+landing off the natural min/mean relationship (e.g. highest `min_dist` among below-median
+`mean_dist` candidates, and the mirror image). Produced 4 pools in `EUR_only`
+(`highmin_lowmean_new` / `lowmin_highmean_new`, 2 reps each, suffix `_new` per user request to
+mark the new sampling scheme) in a separate `ambisim_new/` tree (mirrors the `ambisim_n16/`
+pattern from the n=16 experiment below — keeps both mini-experiments from being silently
+picked up by the n=8 grid's glob-based notebook discovery). `00_pool_geometry_qc.ipynb`
+confirms real disagreement: `lowmin_highmean` pools sit at the 0th percentile of the random-draw
+min_dist distribution while their mean_dist sits at the 75th-95th percentile.
+
+**Also launched, same session: n=16 mini-experiment** (separate from the above — tests whether
+donor *count* matters, not min/mean separation; see README/user request re:
+https://elifesciences.org/reviewed-preprints/106769). 4 pools (`EUR_only`, `random`/
+`greedy_maxmin`, 2 reps each, 16 donors) in `ambisim_n16/`. Pipeline fully parameterized
+already (`nominate()` takes `n=`, `setup_drop.sh`/`run_ambisim.sh` take an arbitrary-length
+donors file) — no new simulation code needed, just new arguments. `h_rt` set to 24h from the
+start (not the n=8 grid's original, since-reverted 14h) and demuxlet call memory pre-set to
+32GB (not the 8GB default that silently OOM-killed ~27/132 n=8 calls) to avoid rediscovering
+both known failure modes for a 4-pool experiment.
+
+**Adversarial pool walkthrough (recap for the record, numbers already in README point 1, ll_gap
+numbers newly pulled this session):** family/family_mixed pools (n=6, real pedigrees) show BOTH
+accuracy AND margin dropping together (GEX ll_gap_mean 7.03 vs. 9.92 rest, Mann-Whitney
+p<0.0001; ATAC 18.96 vs. 27.44, p<0.0001) — unlike the ordinary min_dist-vs-margin comparisons
+elsewhere in this repo, where margin moves but accuracy doesn't. `adversarial_mindist` (n=9,
+unrelated donors, worst-case-selected) shows the same pattern more weakly (GEX ll_gap 8.93 vs.
+9.92, p=0.018; ATAC 25.33 vs. 27.44, p=0.019). Read: ordinary distance-based curation moves
+margin without moving accuracy (a small effect that doesn't cross the threshold to change a
+discretized accuracy call); real relatedness moves both together, suggesting there is a
+threshold and literal relatedness is large enough to cross it while ordinary design choices
+aren't. This is the concrete sense in which "pool selection is not trivial" — it's not that
+distance-optimization design doesn't matter at all, it's that avoiding actual close relatives is
+the one selection decision demonstrated to move accuracy, and it's a different kind of decision
+(a relatedness check) than what any of the distance-based strategies here implement.
+
+**Open / next:**
+1. Both mini-experiments (n=16, orthogonal-sampling) are mid-pipeline (ambisim/cr_arc/demuxlet
+   not yet complete as of this entry) — check `qstat -u terencew` for `n16_*` and `new_*` jobs,
+   then run demuxlet call and score against `ambisim_n16/`/`ambisim_new/` truth once ready.
+   Neither has a results notebook yet — will need small dedicated analysis notebooks (not 01a-01d,
+   which are wired to the main `ambisim/` tree and `pool_experiments.txt`).
+2. Only 2 quadrants (4 pools) sampled for the orthogonal-sampling experiment so far
+   (`highmin_lowmean`, `lowmin_highmean`) — the two "disagreement" cells. Could extend to
+   `highmin_highmean`/`lowmin_lowmean` (roughly what greedy and adversarial_mindist already
+   cover, respectively) for a fuller 2x2 grid if the disagreement cells show a real effect worth
+   following up.
+3. Real data is *more* decoupled (r=0.14) than even random simulated draws (r=0.54) — open
+   question why, not yet investigated. Plausible: real pool assignment isn't i.i.d. sampling
+   from one large homogeneous panel, it's a smaller fixed donor-line resource under
+   study-specific ancestry-ratio constraints, which may have different pairwise-distance
+   geometry. Worth a closer look if the orthogonal-sampling pools show a real effect and the
+   project wants to push the simulation's geometry closer to real data's.
+
+**If resuming, read:** `NOTES.md`'s "min_dist and mean_dist are far more entangled" section for
+the full mechanism (including the correction), `00_pool_geometry_qc.ipynb` for the QC itself,
+then `qstat` for both mini-experiments' status.
+
+---
+
 ## 2026-09-14 — root-caused the OOM-killed demuxlet calls, reran 01a-01d at n=88, first accuracy signal
 
 **State at start:** 61/132 pools had both-modality demuxlet `.best` outputs (up from 32 on

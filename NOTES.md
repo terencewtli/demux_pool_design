@@ -153,13 +153,29 @@ aggregate mix. Nothing forces these two kinds of quantity (a population average 
 extremal/order statistic) to move together — unless the construction procedure explicitly
 makes them move together, which greedy point-repulsion does.
 
-**Confirmation this is a construction-procedure artifact, not a property of genetic distance
-in general**: `random` pools drawn from our own multi-ancestry universes (no optimization at
-all) show min_dist vs. mean_dist r=-0.09 (n.s.) — matching real data almost exactly.
-`ancestry_balanced` (proportional ancestry sampling, no distance optimization) sits in between
-(r=0.64, n=7, underpowered). The correlation scales directly with how much explicit "push
-everyone apart" optimization pressure the construction procedure applies — it is not an
-intrinsic property of unrelated donors being "too similar to distinguish" (real data's min_kl
+**Correction (2026-09-14, `ipynb/ambisim/00_pool_geometry_qc.ipynb`): an earlier draft of this
+note claimed `random` pools decouple min_dist/mean_dist to r=-0.09, "matching real data almost
+exactly."** That was based on only 7 actually-simulated `random`-strategy pools -- nowhere near
+enough power to trust a correlation estimate (the same small-n trap flagged elsewhere in this
+file). A properly powered check -- 20,000 genuine random 8-donor draws from the `EUR_only`
+panel, distance-matrix lookups only, no simulation needed -- gives **r=0.536 (p<1e-100-ish, a
+real effect)**, not zero. Random sampling does not fully decouple these metrics: if a random
+draw happens to be broadly spread out, the closest pair also tends to be a bit farther apart,
+just from the geometry of pairwise-distance order statistics, independent of any optimization.
+
+The corrected three-tier picture: **real data r=0.14** (most decoupled) < **random draws
+r=0.536** (a real, moderate, unavoidable baseline) < **greedy_maxmin/greedy_maxmean r=0.69-0.84**
+(more entangled than even random). So greedy search still measurably over-entangles the two
+metrics relative to pure random sampling -- the qualitative conclusion below is unchanged -- but
+it is not true that "any unoptimized sampling" reproduces real data's independence; real data is
+*more* decoupled than even i.i.d. random draws from a single large reference panel, plausibly
+because real pool assignment isn't literally uniform sampling from one big homogeneous panel --
+it's a smaller, fixed donor-line resource under study-specific ancestry-ratio constraints, which
+apparently has different pairwise-distance geometry than a clean random draw. `ancestry_balanced`
+(proportional ancestry sampling, no distance optimization) sits at r=0.64 (n=7, still
+underpowered, not directly comparable to the well-powered numbers above). The correlation still
+scales with how much explicit "push everyone apart" optimization pressure is applied — it is not
+an intrinsic property of unrelated donors being "too similar to distinguish" (real data's min_kl
 r=0.40 beating mean_kl r=0.13 against observed LL-gap already shows these metrics carry real,
 different signal among unrelated donors when allowed to vary independently).
 
@@ -170,11 +186,19 @@ different signal among unrelated donors when allowed to vary independently).
   `random`-vs-everything-else null result, which doesn't depend on separating min from mean.
 - **A reviewer saying "min/mean dist are picking up the same donor structure" would be
   correct**, and the fix is not more replicates of the same greedy strategies — it's a
-  different construction procedure. Since random draws already decouple these metrics
-  naturally, the fix is stratified/rejection sampling: draw many random pools, then explicitly
-  select for combinations greedy search would never produce on its own (e.g. high `min_dist` +
-  ordinary `mean_dist`, or vice versa) to get pools that actually orthogonalize the two axes,
-  rather than optimizing one and accepting whatever correlated side-effect it has on the other.
+  different construction procedure. Plain random draws only partially help (r=0.536, not zero
+  -- see the correction above), so the actual fix implemented is rejection sampling *on top of*
+  random draws: generate a large pool of random candidates (20,000 per rep, cheap since it's
+  distance-matrix lookups only), then explicitly keep the ones landing off the natural
+  min/mean relationship -- e.g. among candidates with below-median `mean_dist`, pick the one
+  with the highest `min_dist` ("high_min_low_mean"), and the mirror image
+  ("low_min_high_mean"). See `scripts/ambisim_new/lib/generate_orthogonal_pools.py` and the
+  4 `*_new` pools it produced (`EUR_only__highmin_lowmean_new__rep{1,2}`,
+  `EUR_only__lowmin_highmean_new__rep{1,2}`) -- `00_pool_geometry_qc.ipynb` confirms these sit
+  far off the random-draw relationship (e.g. `lowmin_highmean` pools: min_dist at the 0th
+  percentile of random draws while mean_dist sits at the 75th-95th percentile), i.e. real
+  disagreement between the two metrics that neither greedy search nor plain random sampling
+  would produce on its own.
 - This is a fixable methodology gap specific to how `min_dist`/`mean_dist` design pools are
   built, not evidence the project's underlying question is unanswerable or that the accuracy
   null result (`README.md`) is unsound — that result doesn't depend on min/mean separation.

@@ -126,13 +126,15 @@ relatedness. Two things could still change this before calling it final:
 - `greedy_maxmin` and `greedy_maxmean` weren't actually testing two separable
   design philosophies — see `NOTES.md`. They produce 50-60% the same donor
   list and their `min_dist`/`mean_dist` values correlate at r=0.7-0.84 in our
-  pools vs. r=0.14 in real data, because both use the same greedy point-
-  repulsion algorithm. This doesn't change the accuracy null result (which
-  doesn't depend on separating min from mean), but any future pool
-  construction meant to isolate the min-vs-mean question specifically should
-  use stratified/rejection sampling on random draws instead of two flavors of
-  the same greedy search — random draws already decouple these metrics
-  naturally, matching real data.
+  pools, vs. r=0.54 for plain random draws (a real, unavoidable baseline
+  correlation, not zero) and r=0.14 in real data (the most decoupled of all
+  three). This doesn't change the accuracy null result (which doesn't depend
+  on separating min from mean). **Status: fix implemented and running** —
+  `scripts/ambisim_new/lib/generate_orthogonal_pools.py` uses rejection
+  sampling on top of random draws (not another greedy variant) to construct
+  4 pools that deliberately disagree between the two metrics (`EUR_only`,
+  suffix `_new`); `ipynb/ambisim/00_pool_geometry_qc.ipynb` confirms they
+  land off the natural min/mean relationship. Results pending simulation.
 
 ## Next steps
 
