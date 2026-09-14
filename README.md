@@ -76,6 +76,25 @@ an otherwise-normal pool, while `adversarial_mindist`'s greedy construction
 whole pool's geometry uniformly, so there's no single "bad pair" to point
 to — which is also likely why its accuracy effect is the weaker of the two.
 
+**Accuracy and margin move on completely different scales for the family
+pools — practically, singlet rate holds up much better than the margin story
+alone would suggest.** Relative to ordinary pools: accuracy drops 2.4% (GEX)
+/ 1.2% (ATAC), while LL-gap drops 29.2% (GEX) / 30.9% (ATAC) — the margin
+effect is 12-25x larger in relative terms. Calibration check: **3 of 73
+ordinary (non-family) pools already score at or below the family-pool mean
+GEX accuracy, and 1 of 73 for ATAC**, purely from normal pool-to-pool
+variation (ambient RNA, sequencing luck), no relatedness involved — a family
+pool isn't landing somewhere unprecedented, just at the unlucky end of what
+ordinary pools already produce sometimes. Practical read: **multiplexing
+actual relatives mostly still works** for raw singlet-rate purposes — the
+discrete demuxlet call is a threshold on a continuous margin, so a 30% margin
+drop mostly moves cells from "very confident correct call" to "still-correct-
+but-less-confident call," only flipping the call for cells already near the
+decision boundary. The real cost shows up if you do confidence-based
+filtering downstream (dropping low-margin cells before analysis, common
+practice) — a family pool would lose more cells to that filter than an
+ordinary pool would, even though its raw accuracy looks only mildly worse.
+
 **Classifier margin (LL-gap) is the one design signal that holds up.**
 `min_dist` vs. mean LL-gap, ordinary pools only: r=0.31 (GEX), r=0.31 (ATAC),
 both p<0.01 — smaller than the naive whole-sample r=0.66-0.73 but real, and it
