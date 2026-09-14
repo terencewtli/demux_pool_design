@@ -83,7 +83,29 @@ silently unless someone diffs the GEX vs. ATAC `.best` counts.
    run in simulation.
 
 **If resuming, read:** `README.md` "Results so far" for current numbers, this entry for how n=88
-was reached and what's still silently-failing-prone in the pipeline (item 2 above).
+was reached and what's still silently-failing-prone in the pipeline (item 2 above), and the
+correction note immediately below for a mistake made and fixed the same day.
+
+**Correction (same day, same session):** the first pass through `README.md`'s "Results so far"
+reported whole-sample (n=88) correlations for accuracy-vs-design and the min_dist-vs-mean_dist
+bottleneck comparison without checking whether they were driven by a handful of leverage points.
+The user asked "which pools specifically contributed" and "is this a small effect size", which
+prompted the check that should have been done before writing it up: excluding the 15 adversarial
+pools from each correlation. Result — the "accuracy is now significant" and "min_dist now beats
+mean_dist" claims both evaporate entirely without the adversarial pools (r drops to ~0 / reverses
+back to favoring mean_dist), while the LL-gap margin correlation (the one result the n=32 snapshot
+was actually confident about) survives the same check, just at a smaller point estimate (r≈0.31
+non-adversarial vs. r≈0.66 full sample). The real new finding is narrower and more specific than
+first written: pools built from actual close relative pairs (6 `adversarial_family`/
+`_mixed` pools) show a small but statistically real accuracy and margin deficit
+(Mann-Whitney p<0.001 both modalities) — not a general "genetic-distance-based design predicts
+accuracy" result. README's "Results so far" and "Commentary" sections were rewritten in place to
+reflect this; see the corrected numbers there rather than trusting a re-derivation from memory.
+**Lesson for next session**: any pool-level correlation in this repo should be checked against the
+adversarial-pool subset (`strategy.str.startswith('adversarial')`) before being reported as a
+finding — this is the second time (after the original min_dist/mean_dist reasoning in the n=32
+snapshot) that a structurally different small subgroup, not a trend across the design space, turned
+out to be doing the work.
 
 ---
 

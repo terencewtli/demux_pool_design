@@ -85,109 +85,133 @@ working as intended. Treat every `greedy_maxkl` result in this repo
 
 ## Results so far (n=88 pools, full rep1-3 core grid + partial adversarial floor)
 
-**Headline change from the n=32/rep1-only snapshot: adding adversarial pools
-(the first pools in this design to contain an actually-close donor pair)
-flipped raw accuracy from a null result to a real, significant design signal,
-and flipped the min_dist-vs-mean_dist bottleneck comparison to match the
-real-data result.** Both were explicitly predicted as likely once adversarial
-pools landed (see the old point-3 reasoning kept below) — this snapshot is the
-first evidence for or against that prediction, and it came out in favor.
+**Correction (2026-09-14, same day as first written): the initial pass through
+this section overstated things by reporting whole-sample correlations without
+checking whether they were driven by a handful of leverage points. They were.**
+Every correlation below is now reported both on the full n=88 sample and with
+the 15 adversarial pools excluded (73 pools: `random`/`greedy_max*`/
+`ancestry_balanced`, all unrelated 1000G donors) — that split is the load-
+bearing check in this whole section, not a footnote.
 
-**1. Raw singlet accuracy now shows a real, significant design signal.**
-min_dist vs. accuracy: r=+0.349, p=0.001 (GEX); r=+0.564, p<0.001 (ATAC).
-kl_min is an even stronger predictor: r=+0.399 (GEX), r=+0.668 (ATAC), both
-p<0.001. (Previously: r=0.062 p=0.74 GEX, r=0.435 p=0.013 ATAC, n=32,
-rep1-only, no adversarial pools.) See
-`notebooks/ambisim/01b_pool_level_summary.ipynb`.
+**1. Raw singlet accuracy: the "significant design signal" is entirely an
+adversarial-pool artifact, not a general trend.** Full sample: min_dist vs.
+accuracy r=+0.349 p=0.001 (GEX), r=+0.564 p<0.001 (ATAC). Excluding the 15
+adversarial pools: r=-0.011 p=0.93 (GEX), r=+0.101 p=0.40 (ATAC) — nothing
+left in either modality. GEX's full-sample correlation isn't even robust to
+rank transform (Spearman rho=0.205, p=0.056, n.s.), a sign the Pearson number
+was leverage from a few points, not a monotonic trend. **The honest
+1-pool-level plot is a floor, not a slope**: 6 pools built from real 1000G
+pedigrees (`adversarial_family`/`adversarial_family_mixed`, ~50% IBD relative
+pairs) sit at accuracy 0.81–0.83 (GEX) / 0.90–0.91 (ATAC), measurably below
+everyone else (mean 0.843/0.918; Mann-Whitney p=0.0008 GEX, p=0.0001 ATAC).
+The 9 `adversarial_mindist` pools (unrelated donors chosen to minimize genetic
+spread) show a smaller but still real gap (p=0.0016 GEX, p=0.0045 ATAC, mean
+diff only +0.013/+0.004) despite `min_dist` values that heavily overlap the
+ordinary `random`/`greedy_max*` pools — so even that gap isn't well explained
+by `min_dist` as a continuous metric; it looks more like a relatedness/IBD
+effect the Euclidean distance only partly captures. **Effect size, even
+including every adversarial pool**: the fitted slope over the full observed
+min_dist range predicts only a 1.2–1.9 percentage point accuracy swing.
+Among the 73 non-adversarial pools specifically — the comparison that answers
+"does curating unrelated donors by genetic distance move raw accuracy" — the
+answer is still no, same as the n=32 snapshot.
+See `notebooks/ambisim/01b_pool_level_summary.ipynb`.
 
-**2. Classifier margin (LL-gap) still shows a real, significant design
-signal, now even stronger.** Pool-mean LL-gap vs. `min_dist`: r=0.657 (GEX),
-r=0.729 (ATAC), both p<0.001; low-margin-call fraction (t100) vs. `min_dist`:
-r=-0.507 (GEX), r=-0.679 (ATAC), both p<0.001.
+**2. Classifier margin (LL-gap) is the one result that survives the
+adversarial-pool check.** Full sample: min_dist vs. ll_gap_mean r=0.657 (GEX),
+r=0.729 (ATAC). Excluding adversarial pools: r=+0.314 p=0.007 (GEX), r=+0.311
+p=0.007 (ATAC) — smaller than the full-sample number (as expected, since the
+adversarial pools are real high-leverage points, not noise) but still real
+and significant among ordinary unrelated-donor pools alone. This replicates
+the n=32 finding (r=0.51–0.56 there) — the point estimate is a bit lower here
+(0.31), plausibly the n=32 estimate running high by chance rather than the
+effect actually weakening, but the direction and significance hold up with
+more than double the pools. `low_margin_frac_t100` vs. min_dist also survives
+(r=-0.271 p=0.02 GEX, r=-0.349 p=0.003 ATAC, non-adversarial only). This is
+still the best-supported result in the whole repo.
 (`notebooks/ambisim/01d_bottleneck_donor.ipynb`)
 
-**3. `min_dist`/`kl_min` (worst-pair geometry) now beats `mean_dist`/`kl_mean`
-(pool-average geometry) at the bottleneck-donor level — matching the real-data
-result, reversing the n=32 snapshot.** Bottleneck LL-gap: min_dist r=+0.732
-vs. mean_dist r=+0.593 (GEX); min_dist r=+0.765 vs. mean_dist r=+0.561 (ATAC).
-This confirms the leading hypothesis from the previous snapshot: those 32
-pools were all built from *unrelated* 1000G donors with no genuinely close
-pair, so `min_dist` had no real edge case to detect yet; the adversarial pools
-now landing are exactly what creates one. At the pool-*average* level the
-picture is more mixed: GEX still slightly favors `mean_dist` (r=0.729 vs.
-r=0.655), while ATAC now favors `min_dist` (r=0.728 vs. r=0.689) — so the
-reversal is real and modality-dependent, not a clean sweep. Bottleneck
-*true-donor accuracy* (as opposed to LL-gap) also picked up a real ATAC signal
-that wasn't there before (r=+0.389, p<0.001; GEX r=+0.175, p=0.102, still
-n.s.) — the first sign the margin effect is starting to convert into an
-accuracy effect at the hardest-donor level, at least for ATAC. Caveat: only a
-partial adversarial set has landed so far (44/132 pools not simulated at
-all) — treat this reversal as a real, replicated-across-many-universes
-signal, not yet the final word.
+**3. The "min_dist now beats mean_dist" bottleneck reversal does NOT survive
+excluding adversarial pools — it's the same artifact as point 1.** Full
+sample: bottleneck LL-gap vs. min_dist r=+0.732 (GEX) / r=+0.765 (ATAC) vs.
+mean_dist r=+0.593 / r=+0.561 — min_dist ahead, as originally reported.
+Excluding the 15 adversarial pools: min_dist drops to r=+0.295 (GEX) /
+r=+0.271 (ATAC) while mean_dist actually *strengthens* to r=+0.658 / r=+0.666
+— mean_dist wins again, same direction and similar magnitude as the n=32
+snapshot (which had no adversarial pools at all). **This result is reversed
+from what was first written: `min_dist`'s apparent real-data-like advantage
+was the adversarial pools acting as leverage points on the correlation, not a
+property that emerged once "any" close pair existed in the design.** It may
+still be true that `min_dist` matters specifically once relatedness is real
+(the adversarial_family pools are the closest analog to the real-data
+pedigrees), but that's a different, narrower claim than "min_dist beats
+mean_dist in general," which is what the first pass claimed.
 
-**4. Ambient RNA contamination still swamps design signal at high
-contamination, but the crossover point moved with more data.** min_dist vs.
-LL-gap p5 correlation: r=0.606/0.709 (GEX/ATAC) at low ambient (<10%),
-dropping to r=0.046 (n.s., GEX) / r=0.352 (p=0.001, still significant, ATAC)
-at high ambient (≥30%) — GEX design signal now collapses fully at high
-ambient while ATAC retains a real, if weaker, effect even there.
+**4. Ambient-stratified accuracy correlations (previously reported as
+resolving the GEX/ATAC split): also mostly an adversarial-pool artifact.**
+Redone excluding adversarial pools: GEX accuracy-vs-min_dist is significant in
+only 1 of 5 ambient bins (10-20%: r=0.264, p=0.024 — down from 3/5 bins in the
+full-sample version), and ATAC likewise drops to 1 of 5 (10-20%: r=0.343,
+p=0.003, down from 3/5). This is essentially the same pattern the n=32
+snapshot already reported ("only one bin marginally significant") — the
+"split resolved" conclusion in the first pass was wrong.
 (`notebooks/ambisim/01c_droplet_ambient_stratified_llgap.ipynb`)
-
-**4b. The GEX/ATAC accuracy split from the n=32 snapshot has mostly resolved
-now that adversarial pools are in the mix.** Previously GEX's pooled
-accuracy-vs-`min_dist` correlation looked null everywhere, ambient bin or not
-(only one of 5 bins marginally significant). Now: GEX accuracy vs. min_dist is
-significant in 3 of 5 ambient bins (0-10%: r=0.567; 10-20%: r=0.539; 20-30%:
-r=0.424; all p<0.001), losing significance only once ambient hits ≥30% where
-accuracy is already collapsing toward its noise floor for every pool
-regardless of design. ATAC is similar or stronger in the same low/mid bins
-(10-20%: r=0.545; 20-30%: r=0.548; 30-40%: r=0.437, all p<0.001) but, unlike
-GEX, keeps a bit of signal into higher ambient and loses it instead at the
-very lowest ambient bin (0-10%: r=0.099, n.s. — likely a ceiling effect,
-mean_acc=0.999 there, essentially no room for design to move the needle).
-Net read: the earlier "GEX shows no design signal, period" conclusion was an
-artifact of not yet having pools with a real close pair to differentiate on,
-not a true modality difference — GEX and ATAC now look qualitatively similar
-(design matters at low/mid ambient, washes out at the high-ambient floor),
-with ATAC's edge being that it degrades more gracefully at the top end.
 
 ## Commentary — does pool design matter?
 
-**Updated 2026-09-14: yes, on this evidence.** The n=32/rep1-only snapshot's
-honest read was "not yet shown on accuracy, but real and robust on margin" —
-that was explicitly conditioned on the adversarial floor not existing yet.
-It now partially does (a growing subset of adversarial pools across several
-universes, 88/132 pools total), and accuracy moved: min_dist/kl_min now
-predict raw singlet accuracy directly (point 1 above), not just margin, and
-the min_dist-over-mean_dist bottleneck reversal predicted in the old point 3
-happened exactly as hypothesized. This is meaningfully different from a naive
-"designed pools are better" story, though — the reversal is bottleneck-level
-and ATAC-favoring more than pool-average and GEX-uniform, and the effect is
-strongest for genuinely close pairs (adversarial) rather than a smooth
-gradient across the "well-designed-ish" unrelated-donor space tested before.
+**Still "not yet shown on accuracy, but real and robust on margin" — the
+n=32 conclusion holds up, it just needed to survive an adversarial-pool
+leverage check first.** An earlier version of this section (written the same
+day, before that check) said adding adversarial pools had flipped accuracy to
+a real signal and reversed the min_dist-vs-mean_dist comparison. Both claims
+turned out to be entirely driven by the 15 adversarial pools acting as
+leverage points on the correlation — see the corrections in "Results so far"
+above. Among the 73 non-adversarial pools (the actual "does curating unrelated
+donors help" question), accuracy is still null and `mean_dist` still beats
+`min_dist`, same as n=32.
 
-What would still change this picture:
+**What is genuinely new in this snapshot:** pools built from real close
+relative pairs (`adversarial_family`/`adversarial_family_mixed`, ~50% IBD)
+show a real, replicated accuracy *and* margin deficit relative to every other
+strategy (Mann-Whitney p<0.001 both modalities) — small in absolute terms
+(1–2 accuracy points) but the first direct evidence in this whole project that
+margin differences can convert into an accuracy difference at all, under a
+condition extreme enough to produce one. `adversarial_mindist` (unrelated
+donors, worst-case-selected) shows a smaller version of the same thing despite
+`min_dist` values that overlap ordinary `random` pools, suggesting the
+Euclidean `min_dist` metric doesn't fully capture whatever adversarial
+selection or relatedness is actually detecting.
+
+So the honest framing is narrower than "does pool design matter": **curating
+unrelated donors by genetic distance (any of the strategies tested —
+`greedy_max*`, `ancestry_balanced`, vs. `random`) has not been shown to move
+raw accuracy, even now at n=88 with real statistical power. Avoiding actual
+close relatives clearly does.** Whether that second finding generalizes into
+something a `min_dist`-style score can predict *before* you know a pool
+contains relatives, or whether it only shows up once you already know to flag
+relatedness directly (e.g. from pedigree/IBD data, not simulated Euclidean
+genotype distance), is unresolved — the `adversarial_mindist` result is
+suggestive but weak enough (p=0.002–0.005, mean diff as small as +0.004 ATAC)
+that it needs more replicates before leaning on it.
+
+What would change this picture:
 - 44/132 pools (mostly more adversarial reps and remaining rep2/rep3 of the
-  core grid) haven't been simulated at all yet — see `NEXT_STEPS.md`. The
-  correlations above are already many-universe and highly significant, but a
-  bigger n, especially more adversarial_family/adversarial_family_mixed
-  pedigree pools, would tighten the accuracy-side estimates (currently the
-  weaker of the two effects, especially for GEX bottleneck accuracy, still
-  n.s. at r=+0.175 p=0.10) and clarify whether the pool-average GEX result
-  (still mean_dist-favoring) is a stable finding or will also flip with more
-  adversarial data.
-- The one comparison that could still test whether margin differences convert
-  into accuracy differences under stress — downsampling/degradation
-  robustness (`md/analyses.md` Tier 3) — hasn't been run in simulation yet.
-
-The publication framing from the old snapshot ("a precise account of what a
-VCF alone can and can't tell you pre-experiment") still holds, just with the
-answer to "can it predict accuracy" now trending toward "yes, once the pool
-actually contains a hard pair" rather than "no." That is a more interesting
-and more publishable result than either a clean null or a naive "designed
-pools are always better" — it says pool curation matters specifically insofar
-as it avoids close pairs, which is a testable, actionable claim rather than a
-vague diversity heuristic.
+  core grid) haven't been simulated at all yet — see `NEXT_STEPS.md`. More
+  `adversarial_family`/`adversarial_family_mixed` replicates specifically
+  would tell us whether the relatedness effect is as robust as its p-values
+  suggest at n=6 pools, or partly a small-sample fluke of exactly which
+  pedigrees got drawn.
+- The one comparison that could test whether margin differences convert into
+  accuracy differences under stress even for *unrelated* donors — downsampling
+  /degradation robustness (`md/analyses.md` Tier 3) — hasn't been run in
+  simulation yet. This is arguably higher-value than more adversarial
+  replicates for answering the paper's actual question.
+- **Any new correlation reported in this repo going forward should be checked
+  against the adversarial-pool subset before being written up as a finding**
+  — this snapshot is the second time (after the n=32 min_dist/mean_dist
+  reasoning) that a plausible-sounding pattern turned out to hinge entirely on
+  a small, structurally different subset of pools rather than a trend across
+  the design space.
 
 ## Next steps — highest-value pools to simulate next
 
