@@ -17,12 +17,19 @@ SEED = 42
 EPS = 1e-6
 
 
-def load_design_data():
-    npz = np.load(DESIGN_DIR / '1kg_chr22_dist_matrix.npz', allow_pickle=True)
+def load_design_data(matrix_file='1kg_chr22_dist_matrix.npz', meta_file='1kg_sample_meta.tsv'):
+    # Defaults are the ORIGINAL chr22-only, 20k-SNP distance matrix -- kept
+    # as the default so every existing caller (already-generated pools'
+    # provenance, anything that doesn't pass these args) is unaffected.
+    # Pass matrix_file='1kg_genomewide_dist_matrix.npz',
+    # meta_file='1kg_genomewide_sample_meta.tsv' for the genome-wide
+    # replacement (see build_genomewide_dist_matrix.py and
+    # github/demux_pool_design NOTES.md for why chr22-only was replaced).
+    npz = np.load(DESIGN_DIR / matrix_file, allow_pickle=True)
     D = npz['D']
     X = npz['X']
     sample_ids = list(npz['sample_ids'])
-    meta = pd.read_csv(DESIGN_DIR / '1kg_sample_meta.tsv', sep='\t')
+    meta = pd.read_csv(DESIGN_DIR / meta_file, sep='\t')
     assert list(meta['SampleID']) == sample_ids, 'sample order mismatch'
     return D, X, sample_ids, meta
 

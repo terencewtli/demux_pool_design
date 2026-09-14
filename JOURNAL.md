@@ -19,6 +19,92 @@ Entry template:
 
 ---
 
+## 2026-09-14 (evening, same day) — discovered the distance matrix is chr22-only; building genome-wide replacement; full 132-pool redo decided
+
+**State at start:** user asked how to interpret the raw `min_dist`/`mean_dist` numbers (e.g. 80.6
+vs. 106.1) from the orthogonal-sampling work above. Tracing this back to its source
+(`ipynb/vcf_metrics/local/02a_distance_matrix.ipynb`) surfaced something not previously
+documented anywhere in this repo: **every `min_dist`/`mean_dist`/`kl_min`/`kl_mean` value used
+to select or describe a pool in this entire project — the full 132-pool grid, the n=16
+experiment, the orthogonal-sampling pools — comes from a distance matrix built from chr22 only
+(the smallest human autosome), further subsampled to 20,000 SNPs (MAF>=0.05).** Not genome-wide.
+The source notebook's own comment: "for pool nomination, ranking is all that matters" — this was
+a deliberate speed shortcut for interactive prototyping, never revisited once cluster compute was
+available (`N_SITES = None` for "all sites" was noted as an option but not used).
+
+Also surfaced: the `unrelated` flag used throughout (`universe_idx_for`, the orthogonal-sampling
+safeguard) is `FatherID=='0' AND MotherID=='0'` — pedigree-founder status, not a formal kinship/
+IBD threshold. It rules out documented 1000G trio/quad relationships, not cryptic relatedness in
+general. Relevant given the orthogonal-sampling safeguard added earlier this session relies on it.
+
+**Assessment (not "everything is wrong"):** population ancestry structure is strong and
+consistent across chromosomes, so the ancestry-level findings (universe-level effects, the
+margin/design correlation, the pedigree/family results) likely replicate under a genome-wide
+matrix largely unchanged. What's actually at risk is donor-level precision: exactly which 8
+people get selected as "most extreme" within a universe has more sampling noise from one
+chromosome's 20k SNPs than from the whole genome, and extremal/rejection-sampling searches (the
+orthogonal-sampling pools especially) are more exposed to cryptic relatedness the single-
+chromosome, founder-only `unrelated` check wouldn't catch. The simulation pipeline itself
+(ambisim/cellranger-arc/demuxlet) is completely unaffected — it's donor-list-agnostic.
+
+**Decision (user's call, made explicitly):** rebuild the distance matrix genome-wide, regenerate
+every pool's donor selection against it, then **redo the full 132-pool grid from scratch** (user
+said 135; the actual grid size is 132, see the 2026-09-14 n=88 entry above) once current jobs
+(n=16, orthogonal-sampling) finish. Flagged before proceeding: `/u/project/cluo` is at **95.7%**
+capacity lab-wide (`myquota`, checked this session) and a full 132-pool resimulation is a
+multi-week, heavy-disk undertaking (recall the 27/132-task 14h-wall-time-cap casualty wave from
+the 2026-09-14 morning entry) — worth staging rather than launching all 132 simultaneously.
+
+**Produced this session (data not yet regenerated — matrix build in progress as of this entry):**
+- `scripts/ambisim/lib/build_genomewide_dist_matrix.py` + `scripts/ambisim/qsub/B02_build_genomewide_dist_matrix.sh`
+  (submitted, job 14743297): reservoir-samples 200,000 sites (~10x the original N_SITES, ~2.9%
+  of the 6,869,484 available) from the SAME already-filtered, genome-wide, common+biallelic VCF
+  (`1000G.merged.common_biallelic.vcf.gz`, 24 contigs) that A00_prep_pool_vcfs.sh actually
+  subsets for simulation — so the distance matrix and the real simulated genotypes now come from
+  the same underlying variant set, which chr22-only did not. Two-pass extraction (cheap
+  CHROM/POS listing, then targeted `bcftools -R` pull of just the sampled sites) rather than a
+  slow single pass parsing full genotypes for all 6.87M sites.
+- `pool_nomination.py`'s `load_design_data()` generalized to take `matrix_file`/`meta_file`
+  arguments, defaulting to the ORIGINAL chr22 files — every existing caller is unaffected;
+  pass the genome-wide filenames explicitly to opt in.
+- `scripts/ambisim/lib/regenerate_pools_genomewide.py`: regenerates all 132 pools' donor
+  selections against the new matrix, EXCEPT `adversarial_family`/`adversarial_family_mixed` (6
+  pools) — their relatedness is real pedigree data independent of which chromosome's distances
+  are used, and their "fill" donors are chosen by uniform random choice, not by `D`/`X` at all,
+  so re-deriving them risks picking a different family for no scientific reason; their donor
+  lists are copied unchanged, but their `min_dist`/`mean_dist`/`kl_*` metrics are still
+  recomputed against the new matrix (reported for every pool regardless of selection method).
+  For the other 126 pools, re-runs the same `nominate()` used originally with the same
+  `seed = SEED + rep*100` convention, even for strategies whose own logic doesn't touch `D`/`X`
+  (`random`, `ancestry_balanced`) — `universe_idx` is a list of integer positions into
+  `sample_ids`, and the new genome-wide VCF's sample order isn't guaranteed to match the old
+  chr22 VCF's, so re-deriving from scratch is safer than assuming identical output. Writes to
+  new files (`nominated_pools_n8_genomewide.tsv`, `txt/donors_genomewide/`) for review — does
+  NOT touch the existing `txt/donors/` or `nominated_pools_n8.tsv`.
+- Not yet run: `regenerate_pools_genomewide.py` (waiting on the matrix build), any resimulation.
+
+**Open / next:**
+1. Once `B02_build_genomewide_dist_matrix` (job 14743297) finishes, run
+   `regenerate_pools_genomewide.py` and review `genomewide_vs_chr22_donor_overlap.tsv` — it
+   reports, per pool, how many of the 8 donors are identical to the old chr22-based selection.
+   This tells you concretely how much actually changes before committing to resimulation.
+2. Let the n=16 and orthogonal-sampling mini-experiments finish (both mid-pipeline, chr22-based
+   — decide separately whether they're worth redoing genome-wide or are a big-enough effect/
+   proof-of-concept either way).
+3. Decide staging for the full 132-pool resimulation given the 95.7%-full shared quota — not
+   recommended to launch all 132 simultaneously given the earlier 14h-wall-time crash wave.
+4. `greedy_maxkl`'s "best-of-5-seed" canonical-selection ceremony (see the README/NOTES
+   `greedy_maxkl` section) was NOT replicated in `regenerate_pools_genomewide.py` — it uses the
+   plain `seed = SEED + rep*100` convention uniformly. Since `greedy_maxkl` is already flagged
+   unreliable regardless of chr22-vs-genome-wide, this was judged not worth preserving, but flag
+   if that reasoning should be revisited.
+
+**If resuming, read:** this entry, then `qstat -u terencew | grep B02` for the matrix build
+status, then `genomewide_vs_chr22_donor_overlap.tsv` once `regenerate_pools_genomewide.py` has
+run, before deciding on resimulation scope.
+
+---
+
 ## 2026-09-14 (later same day) — min_dist/mean_dist entanglement found, fixed, n=16 and orthogonal-sampling mini-experiments launched
 
 **State at start:** n=88 results committed and pushed (see entry below). User asked a follow-up
