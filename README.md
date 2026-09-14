@@ -67,6 +67,14 @@ replicates the original n=32 finding (r=0.51-0.56 there) in direction and
 significance. `mean_dist` still outpredicts `min_dist` at the bottleneck-donor
 level (r≈0.66 vs. r≈0.30-0.40) among ordinary pools — same as the n=32
 snapshot; the earlier report of a reversal was a leverage artifact (`NOTES.md`).
+**Important caveat on this whole min-vs-mean comparison**: `greedy_maxmin` and
+`greedy_maxmean` produce 50-60% the *same donor list* per universe/rep and their
+`min_dist`/`mean_dist` values correlate at r=0.69-0.84 in our pools, vs. r=0.14
+(essentially independent) in real 10x data. This is a construction-procedure
+artifact (both are the same greedy point-repulsion algorithm), not a property
+of genetic distance in general — see `NOTES.md` for the full mechanism and why
+it doesn't undermine the accuracy null result above, which doesn't depend on
+separating min from mean.
 
 **Design does not rescue high-ambient ("bad") droplets — the opposite.**
 `min_dist` vs. LL-gap, split by ambient RNA bin (ordinary pools only): strongest
@@ -115,6 +123,16 @@ relatedness. Two things could still change this before calling it final:
   stress, for *ordinary* (non-relative) pools — hasn't been run in simulation
   yet, and is probably the highest-leverage remaining experiment for settling
   whether this is a real accuracy story or a margin-only one.
+- `greedy_maxmin` and `greedy_maxmean` weren't actually testing two separable
+  design philosophies — see `NOTES.md`. They produce 50-60% the same donor
+  list and their `min_dist`/`mean_dist` values correlate at r=0.7-0.84 in our
+  pools vs. r=0.14 in real data, because both use the same greedy point-
+  repulsion algorithm. This doesn't change the accuracy null result (which
+  doesn't depend on separating min from mean), but any future pool
+  construction meant to isolate the min-vs-mean question specifically should
+  use stratified/rejection sampling on random draws instead of two flavors of
+  the same greedy search — random draws already decouple these metrics
+  naturally, matching real data.
 
 ## Next steps
 

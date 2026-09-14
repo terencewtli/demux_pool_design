@@ -115,3 +115,66 @@ distance metric more room to vary at all. So the original "ancestry continuum di
 effect" hypothesis was backwards: mixing ancestries is what creates enough distance variance
 to detect a design effect in the first place; restricting to a single ancestry mostly just
 removes power. Caveat: n=29 is still thin evidence, not a settled result.
+
+## `min_dist` and `mean_dist` are far more entangled in our greedy-built pools than in real pools — a real methodology gap, not a null-result artifact
+
+**This matters for interpreting every `min_dist` vs. `mean_dist` comparison in `README.md`,
+including point 3 there.** `greedy_maxmin` (maximizes minimum pairwise distance) and
+`greedy_maxmean` (maximizes mean pairwise distance) are meant to be two different optimization
+targets, testing whether worst-case or average-case genetic separation matters more. In
+practice they produce highly similar pools:
+
+- **Donor overlap**: for the same (universe, rep), a median of 5-6 of 8 donors are the
+  *identical* individuals chosen by both strategies (range 1-7/8 across all 15 single-ancestry
+  and 12 multi-ancestry universe×rep combinations checked). Two causes: (1) both
+  `nominate_greedy_*` functions in `pool_nomination.py` use `np.random.default_rng(seed)` with
+  the *same seed* per rep, so they're guaranteed to start from the identical first donor before
+  the greedy paths can diverge; (2) more fundamentally, a candidate that's far by the min-
+  criterion from the current pool is usually also far by the mean-criterion when drawing from
+  a single large, homogeneous, unrelated-donor panel, so the two greedy searches keep landing
+  on the same outlying candidates regardless of the seed issue.
+- **Metric correlation**: across the 88 simulated pools, `min_dist` vs. `mean_dist` r=0.69-0.72
+  (non-adversarial), rising to r=0.84 in multi-ancestry universes specifically. `greedy_maxmin`
+  boosts `mean_dist` by +10.4 over `random` — almost exactly what `greedy_maxmean` itself
+  achieves (+10.9) — and `greedy_maxmean` boosts `min_dist` by +6.6, more than half of what
+  `greedy_maxmin` achieves (+12.3). Neither strategy isolates its target axis.
+
+**Real data shows these two metrics are close to independent, not correlated.** In the 63
+real 10x pools (`notebooks/vcf_metrics/01a_expected_ll.ipynb` /
+`notebooks/real_data/01h_bottleneck_donor.ipynb` source data,
+`demux_benchmark/pool_design/csv/50_line/pool_genetic_dists.csv`): **min_dist vs. mean_dist
+r=0.137 (p=0.29, n.s.)**. The mechanism is clean: `mean_dist` vs. each pool's EUR/AFR ancestry
+ratio (`n_eur`, the only compositional axis that varies in this real cohort) is r=-0.91 —
+essentially deterministic, since mean distance is a population-average quantity that tracks
+aggregate ancestry composition almost perfectly. `min_dist` vs. that same ancestry ratio is
+r=-0.16 (n.s.) — min_dist is set by whichever *specific pair* of individuals happens to be
+closest, a local/idiosyncratic property of exactly who got pooled, independent of the
+aggregate mix. Nothing forces these two kinds of quantity (a population average vs. an
+extremal/order statistic) to move together — unless the construction procedure explicitly
+makes them move together, which greedy point-repulsion does.
+
+**Confirmation this is a construction-procedure artifact, not a property of genetic distance
+in general**: `random` pools drawn from our own multi-ancestry universes (no optimization at
+all) show min_dist vs. mean_dist r=-0.09 (n.s.) — matching real data almost exactly.
+`ancestry_balanced` (proportional ancestry sampling, no distance optimization) sits in between
+(r=0.64, n=7, underpowered). The correlation scales directly with how much explicit "push
+everyone apart" optimization pressure the construction procedure applies — it is not an
+intrinsic property of unrelated donors being "too similar to distinguish" (real data's min_kl
+r=0.40 beating mean_kl r=0.13 against observed LL-gap already shows these metrics carry real,
+different signal among unrelated donors when allowed to vary independently).
+
+**What this means for the project, concretely:**
+- The `greedy_maxmin` vs. `greedy_maxmean` comparisons throughout this repo were never a clean
+  test of "does worst-case vs. average-case optimization matter" — they're a comparison of two
+  algorithms that produce 50-60% the same donor list. This does not affect the broader
+  `random`-vs-everything-else null result, which doesn't depend on separating min from mean.
+- **A reviewer saying "min/mean dist are picking up the same donor structure" would be
+  correct**, and the fix is not more replicates of the same greedy strategies — it's a
+  different construction procedure. Since random draws already decouple these metrics
+  naturally, the fix is stratified/rejection sampling: draw many random pools, then explicitly
+  select for combinations greedy search would never produce on its own (e.g. high `min_dist` +
+  ordinary `mean_dist`, or vice versa) to get pools that actually orthogonalize the two axes,
+  rather than optimizing one and accepting whatever correlated side-effect it has on the other.
+- This is a fixable methodology gap specific to how `min_dist`/`mean_dist` design pools are
+  built, not evidence the project's underlying question is unanswerable or that the accuracy
+  null result (`README.md`) is unsound — that result doesn't depend on min/mean separation.
