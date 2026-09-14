@@ -19,6 +19,74 @@ Entry template:
 
 ---
 
+## 2026-09-14 — root-caused the OOM-killed demuxlet calls, reran 01a-01d at n=88, first accuracy signal
+
+**State at start:** 61/132 pools had both-modality demuxlet `.best` outputs (up from 32 on
+2026-09-12, from the 96-pool array submitted that session working through the queue). A naive
+`ls */demux/demuxlet/*/*.best | wc -l` gave 149, which overestimates readiness — it counts
+lopsided pools where only one modality finished.
+
+**Investigation:** 27 pools had exactly one modality's `.best` missing despite both pileups
+(`.var.gz`) existing — the same silent-failure shape flagged but not root-caused for
+`EUR_EAS__greedy_maxmean__rep1` on 2026-09-12. Root cause found this session: the shared
+`demux_benchmark/template_demux/demuxlet.sh` template requests only `h_data=4G, -pe shared 2`
+(8GB total). Whichever modality happens to have the larger pileup for a given pool (not
+consistently GEX or ATAC — depends on the pool's realized variant count, ~3.8M-6.9M observed)
+gets OOM-killed (`Killed`, no error propagated) partway through loading the pileup. `A02b`
+fire-and-forgets both `qsub` calls and never checks their outcome, so this fails completely
+silently unless someone diffs the GEX vs. ATAC `.best` counts.
+
+**Decisions made:**
+- Did not edit the shared `demuxlet.sh` template (used elsewhere, e.g. the IGVF pilot
+  pipeline) — resubmitted the 27 affected (pool, modality) calls directly with
+  `qsub -l h_data=24G` overrides instead. 3 of those (all sharing an unusually large ~6.87M-variant
+  VCF) still OOM'd at 24G and needed `-l h_data=64G`. Worth raising `demuxlet.sh`'s default if this
+  recurs at scale — 8GB is clearly too tight for these ambisim pileups in general, not just an
+  edge case.
+- Separately (pool_design infra, not this repo): found and reran the `AFR_only__greedy_maxkl__rep1`
+  simulation blocked by a wrong-donor-samples VCF, killed a hung `cr_arc` job stuck 17.5h past its
+  own wall-time deadline, and bumped `A01b_run_cr_arc.sh`'s `h_rt` 14h→24h after confirming (via
+  the pipestance's own `_log` timestamp) that the 14h cap had killed 26 of 27 incomplete
+  pipestances mid-run. Not part of this repo's history but relevant to why more pools are ready now.
+- Added a readiness-reporting cell to `01a` (right after pool discovery) that diffs discovered
+  `.best` files against the full `pool_experiments.txt` and prints ready/partial/not-started counts
+  by name — makes the exact failure mode above visible on every rerun instead of requiring a manual
+  GEX-vs-ATAC count diff to notice.
+
+**Produced:**
+- Reran `notebooks/ambisim/01a-01d` end to end at n=88/132 pools (up from 32) via
+  `jupyter nbconvert --execute` using the `demux` kernel env (nbconvert itself isn't installed in
+  `demux`; ran from `allcools`'s nbconvert pointed at the `demux` kernel).
+- `README.md` "Results so far" and "Commentary" sections rewritten for n=88. Headline: adding
+  adversarial pools flipped raw accuracy from null (n=32) to significant (min_dist r=+0.35 GEX /
+  +0.56 ATAC, both p<0.005) and reversed the min_dist-vs-mean_dist bottleneck comparison to match
+  the real-data direction (min_dist now wins), exactly as the n=32 snapshot's own hypothesis
+  predicted. Full numbers in README.
+- `greedy_maxkl` spot-checked again with the new rep2/rep3 data: still underperforms `random` on
+  its own target metric (`kl_min`) in every one of the 5 single-ancestry universes. No change to
+  its "unreliable, deprioritized" status.
+- Updated `results/*.csv`, `results/nominated_pools_n8.tsv`, and `notebooks/ambisim/*.ipynb`
+  (executed, with outputs) committed alongside.
+
+**Open / next:**
+1. 44/132 pools still not simulated at all (mostly further adversarial reps + remaining core-grid
+   rep2/rep3) — see `NEXT_STEPS.md`. Rerun `01a-01d` again once more land; the readiness-reporting
+   cell in `01a` will show exactly what's still missing without needing to re-derive it.
+2. `demuxlet.sh`'s 8GB default is undersized for these pileups in general — if this OOM pattern
+   recurs on the next batch, raise the template's default rather than continuing to patch
+   individual `qsub -l h_data=` overrides after the fact.
+3. Pool-average GEX still favors `mean_dist` over `min_dist` (unlike ATAC, which now favors
+   `min_dist` at both bottleneck and pool-average level) — worth watching whether this flips too
+   once more adversarial pools land, or is a stable GEX/ATAC difference.
+4. Tier-3 downsampling/robustness check (`md/analyses.md`) — still the most direct way to test
+   whether the margin advantage ever converts into an accuracy advantage under stress — still not
+   run in simulation.
+
+**If resuming, read:** `README.md` "Results so far" for current numbers, this entry for how n=88
+was reached and what's still silently-failing-prone in the pipeline (item 2 above).
+
+---
+
 ## 2026-09-12 — full remaining-pool array submitted (all 96 unsimulated pools + 3 stuck + 1 partial)
 
 **State at start:** 32/132 pools had completed demuxlet on both modalities (README's "n=32,
