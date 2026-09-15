@@ -262,4 +262,6 @@ def nominate(strategy, universe_idx, D, X, meta, n=N_POOL, seed=SEED):
         return nominate_greedy_maxkl(universe_idx, X, n=n, seed=seed)
     if strategy == 'ancestry_balanced':
         return nominate_ancestry_balanced(universe_idx, meta, n=n, seed=seed)
+    if strategy == 'adversarial_mindist':
+        return nominate_greedy_mindist(universe_idx, D, n=n, seed=seed)
     raise ValueError(f'unknown strategy: {strategy}')

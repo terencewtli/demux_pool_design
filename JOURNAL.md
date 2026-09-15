@@ -149,6 +149,24 @@ entangled" section (now has a genome-wide postscript), then check job 14752950's
 (`ambisim/logs/B04_regenerate_pools_genomewide.*`) and whether the `EUR_only` pilot's demuxlet
 calling has finished.
 
+**Addendum (later same day): job 14752950 crashed, not completed** — `pool_nomination.py`'s
+`nominate()` dispatcher had no case for `adversarial_mindist` (the function
+`nominate_greedy_mindist` existed but was never wired in), so the job died 111/132 pools in
+with `ValueError: unknown strategy: adversarial_mindist`. Since the script only writes output
+once at the very end of the loop, **nothing was saved** — `nominated_pools_n8_genomewide.tsv`
+on disk was still the narrower `create_pools_genomewide.py` file from earlier, not a
+regeneration, and `genomewide_vs_chr22_donor_overlap.tsv` didn't exist at all. Checked all 8
+distinct strategies actually present in `ambisim/txt/pool_experiments.txt` against the
+dispatcher before resubmitting (`adversarial_family`/`adversarial_family_mixed` are correctly
+excluded via `FAMILY_STRATEGIES`, everything else already had a case) — added the missing
+`adversarial_mindist` branch, resubmitted as **job 14753496**. Also submitted (held on the
+still-running GEX/ATAC pileup jobs via `-hold_jid`) demuxlet calling for the `ambisim_n16`
+(n=16 mini-experiment) and `ambisim_new` (EUR_only orthogonal pilot) pileups, and wrote the
+full `scripts/ambisim_final/` pipeline (A00-A02b, mirroring `ambisim_new`'s structure, pointed
+at the regenerated `txt/donors_genomewide/` donor lists) — **not submitted**, explicitly gated
+in each script's header behind job 14753496 landing and the `EUR_only` pilot's actual
+demux-accuracy result, per this entry's existing "Open / next" list.
+
 ---
 
 ## 2026-09-14 (evening, same day) — discovered the distance matrix is chr22-only; building genome-wide replacement; full 132-pool redo decided
