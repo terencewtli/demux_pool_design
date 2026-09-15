@@ -19,6 +19,138 @@ Entry template:
 
 ---
 
+## 2026-09-15 — genome-wide matrix landed (LD-pruned, superseding the 200k-reservoir attempt); min/mean entanglement re-confirmed (worse, not better) genome-wide; orthogonal-sampling fix extended to all 9 universes with a real threshold-calibration bug caught and fixed along the way
+
+**State at start:** the 2026-09-14 evening entry left the genome-wide matrix rebuild
+"in progress" using a 200,000-SNP reservoir sample (`build_genomewide_dist_matrix.py`, no LD
+pruning) and `regenerate_pools_genomewide.py` written but not yet run. Between that entry and
+this session, an **undocumented gap**: someone (this session found the job already running,
+never wrote it) replaced the reservoir-sample approach with a proper LD-pruned PLINK pipeline
+(`build_genomewide_dist_matrix_plink.py`: VCF→bed, `--indep-pairwise 50 5 0.2`, 1-IBS distance
+on the pruned 459,999-SNP set) — the right fix (raw/unpruned SNPs over-weight whatever regions
+happen to have long-range LD), but never journaled. This entry closes that gap retroactively
+and covers everything from this session on top of it.
+
+**Decisions made / found:**
+
+1. **The PLINK matrix job OOM-killed twice, from two different, unrelated bugs** — worth
+   recording precisely since both are non-obvious:
+   - First OOM (silent, no traceback, log stops right after the `D shape` print, maxvmem 338G
+     against a 128G request): assumed to be `sklearn.PCA(svd_solver='randomized')` on the
+     3202×460k dosage array. Fixed by swapping in `flashpca` (compiled, genotype-specific PCA)
+     on a separately-built pruned `.bed`/`.bim`/`.fam` — this fix alone dropped the PCA step
+     from a 3+ hour crash to 3m37s.
+   - **But the resubmitted job climbed past the same 338G crash point anyway** (caught by
+     watching `qstat -j`, not assumed fixed just because PCA was) — the *actual* culprit was
+     `pandas.read_csv` on the wide (3202-row × 460k-column) dosage `.raw` file: pandas' wide-
+     dataframe path has per-column overhead that doesn't show up on a normal (many-rows,
+     few-columns) table, regardless of how tight the requested dtype is. Fixed by parsing the
+     file as plain text into a preallocated `float32` array via `np.fromstring` per line
+     (`--output-missing-genotype 0` on the PLINK recode avoids `'NA'` string handling). Tested
+     on the real file first (~3 min extrapolated, correct 0/1/2 values) before resubmitting.
+   - Net result: `csv/designs/1kg_genomewide_dist_matrix.npz` (D, X, sample_ids, pcs) built
+     successfully, 6m54s end-to-end once both bugs were fixed.
+
+2. **Re-ran the min_dist/mean_dist entanglement check (NOTES.md's existing section) on the new
+   genome-wide matrix — same problem, not better.** Using the fast-strategy pools generated
+   against the new matrix (`nominated_pools_n8_genomewide.tsv`, 9 universes × 5 reps):
+   `greedy_maxmin` min_dist-vs-mean_dist **r=0.992** (n=45) — *higher* than chr22's documented
+   r=0.69-0.72, not lower; `greedy_maxmean` r=0.520; `random` r=0.210 (chr22's well-powered
+   20k-draw random-pool estimate was r=0.536 — genome-wide random draws look somewhat more
+   decoupled, though this specific n=45 estimate is far less powered than that 20k-draw check
+   and shouldn't be over-read). Donor overlap between `greedy_maxmin`/`greedy_maxmean` pools:
+   still a median 5/8 identical donors, same as chr22. **More SNPs did not fix the entanglement**
+   — consistent with NOTES.md's own mechanistic explanation (order-statistic geometry of
+   pairwise distances in a fixed candidate panel, not a SNP-count/power problem), now verified
+   rather than assumed to carry over.
+
+3. **Found and superseded a duplicate-effort collision.** Before finding
+   `regenerate_pools_genomewide.py` (item 1's undocumented predecessor session had already
+   written it, targeting the exact matrix filename this session also built), this session
+   independently wrote a narrower `create_pools_genomewide.py` (fast strategies only, 31 of the
+   full 132 universe×strategy combinations) and started a separate `greedy_maxkl`-only qsub job
+   — both writing to the same `nominated_pools_n8_genomewide.tsv` path the complete script also
+   targets. Caught by reading this file's own JOURNAL/NOTES before finalizing anything further
+   (should have been the first move, not a later one). Resolution: `qdel`'ed the redundant
+   `greedy_maxkl` job (14752676), left the narrower script in place with a superseded-by note
+   rather than deleting it, and submitted `regenerate_pools_genomewide.py` instead (job 14752950,
+   `scripts/ambisim/qsub/B04_regenerate_pools_genomewide.sh`, new — regenerates the full,
+   original 132-pool grid's donor selections + metrics against the genome-wide matrix, copying
+   `adversarial_family`/`adversarial_family_mixed` donor lists unchanged since their pedigree
+   structure doesn't depend on which chromosome's distances are used).
+
+4. **Extended `generate_orthogonal_pools.py`'s rejection-sampling fix to the genome-wide matrix,
+   generalized from `EUR_only`-only to all 9 universes** (nomination is a cheap distance-matrix
+   lookup — 20,000 draws/universe/rep, ~65s total for all 18 universe×rep combinations — so
+   this is not the same cost decision as scaling up simulation, which NOTES.md's existing
+   "recommended path forward" already gates behind the `EUR_only` pilot's outcome; that gate is
+   unchanged, this is nomination only). New file:
+   `scripts/ambisim_new/lib/generate_orthogonal_pools_genomewide.py`.
+   - **Caught a real bug while doing this**: the cryptic-relatedness safeguard's "warn if
+     closest pair is this close" threshold (`70`) was copied verbatim from the chr22 script,
+     whose `D` was a raw Euclidean-ish genotype distance (real range ~0-150). The genome-wide
+     matrix uses PLINK 1-IBS distance (real range ~0.10-0.29) — the old threshold fired on
+     **18/18 pools** on first run, which is itself the tell (a 100% hit rate means the check is
+     miscalibrated, not that every pool is secretly related). Recalibrated empirically rather
+     than guessing a new number: 1,205 real 1000G parent-child pairs sit at
+     D=0.1056–0.1543 (mean 0.1359, std 0.009) against a whole-matrix 1st percentile of 0.1984 —
+     clean separation, no overlap — so the threshold is now `0.16`. Re-run: 7/36 pools flagged
+     (all in the `lowmin_highmean` quadrant specifically, matching NOTES.md's already-documented
+     "heavier-tailed" behavior for that quadrant at chr22 scale — not a new phenomenon).
+     `EUR_only` (the universe with an actual simulation in flight, see below) is clean at both
+     reps.
+
+5. **Found the `EUR_only` orthogonal-sampling pilot (the 4 pools from the 2026-09-14 entry) is
+   actively mid-simulation right now** (`ambisim_new/EUR_only__{highmin_lowmean,lowmin_highmean}
+   _new__rep{1,2}/`, files timestamped today — ATAC pileup complete, demuxlet calling not yet
+   run, no `.best` output exists yet). So the actual open question this whole entanglement
+   thread exists to answer — **does `highmin_lowmean` show a different LL-gap/accuracy signal
+   from `lowmin_highmean`** — is still unanswered; not run by this session, found in-flight from
+   elsewhere. This is the single most important open item, not the genome-wide re-derivation.
+
+**Produced:**
+- `csv/designs/1kg_genomewide_dist_matrix.npz`, `1kg_genomewide_sample_meta.tsv` (LD-pruned,
+  459,999 SNPs, 3202 samples)
+- `scripts/ambisim/lib/build_genomewide_dist_matrix_plink.py` (supersedes
+  `build_genomewide_dist_matrix.py`, kept not deleted)
+- `scripts/ambisim/qsub/B02_build_genomewide_dist_matrix.sh` (updated to call the PLINK script)
+- `scripts/ambisim/lib/create_pools_genomewide.py` + `run_greedy_maxkl_genomewide.py` +
+  `scripts/ambisim/qsub/B03_greedy_maxkl_genomewide.sh` (superseded by item 3 above, kept with a
+  superseded-by note, not deleted)
+- `scripts/ambisim/qsub/B04_regenerate_pools_genomewide.sh` (new qsub wrapper for the
+  pre-existing `regenerate_pools_genomewide.py`) — **job 14752950, running as of this entry**
+- `scripts/ambisim_new/lib/generate_orthogonal_pools_genomewide.py` — produced
+  `csv/designs/nominated_pools_new_genomewide.tsv`, `txt/donors_new_genomewide/*.txt` (36 pools:
+  9 universes × 2 quadrants × 2 reps), `txt/pool_experiments_new_genomewide.txt`. **Nominated
+  only, not simulated.**
+
+**Open / next:**
+1. **Check job 14752950's output** (`csv/designs/nominated_pools_n8_genomewide.tsv`,
+   `csv/designs/genomewide_vs_chr22_donor_overlap.tsv`) once it finishes — this is the
+   authoritative full-132-pool-grid regeneration against the genome-wide matrix, superseding
+   anything from item 3's narrower script.
+2. **Get the `EUR_only` orthogonal pilot's actual demux/LL-gap result** — item 5 above. This
+   answers the real question ("is the min/mean distinction meaningful for demux accuracy, not
+   just for pool construction"), which nothing in this entry does on its own.
+3. **7 flagged pools from item 4** worth a quick human look before treating as controls
+   (same category of check as the 2026-09-14 `HG00116`/`HG00120` etc. verification) — not
+   necessarily wrong, `unrelated` flag still asserts true for all of them, just worth eyes-on
+   given they're specifically in the quadrant most prone to this.
+4. Per NOTES.md's existing gating: don't submit ambisim/cellranger-arc/demuxlet for the 36
+   new genome-wide orthogonal pools (or the regenerated 132-pool grid) until item 2 resolves —
+   nomination being cheap doesn't change that simulation is the expensive part this project has
+   repeatedly had to ration.
+5. `scripts/ambisim/lib/build_genomewide_dist_matrix.py` (reservoir-sample, unpruned) is now
+   superseded by `build_genomewide_dist_matrix_plink.py` — not deleted, but don't use it for
+   anything going forward.
+
+**If resuming, read:** this entry, then `NOTES.md`'s "min_dist and mean_dist are far more
+entangled" section (now has a genome-wide postscript), then check job 14752950's log
+(`ambisim/logs/B04_regenerate_pools_genomewide.*`) and whether the `EUR_only` pilot's demuxlet
+calling has finished.
+
+---
+
 ## 2026-09-14 (evening, same day) — discovered the distance matrix is chr22-only; building genome-wide replacement; full 132-pool redo decided
 
 **State at start:** user asked how to interpret the raw `min_dist`/`mean_dist` numbers (e.g. 80.6

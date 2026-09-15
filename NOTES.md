@@ -261,3 +261,33 @@ the pilot shows nothing, that's still a cheap, useful result — it would mean t
 distinction was never the story either, and the compute is better spent on the Tier-3
 downsampling check, which is more likely to be decisive for the paper's actual accuracy
 question.
+
+**Postscript (2026-09-15): re-confirmed on the genome-wide matrix — same problem, slightly
+worse, not a chr22 artifact.** Once the distance matrix was rebuilt genome-wide (LD-pruned,
+459,999 SNPs — see `JOURNAL.md`), the obvious question was whether more SNPs would relieve the
+entanglement. It doesn't: `greedy_maxmin` min_dist-vs-mean_dist correlation is **r=0.992** (n=45
+genome-wide pools) vs. chr22's r=0.69-0.72; donor overlap between `greedy_maxmin`/
+`greedy_maxmean` is still a median 5/8 identical donors. This is consistent with (not a
+surprise given) the mechanistic explanation above — it's order-statistic geometry of pairwise
+distances within a fixed candidate panel, not a SNP-count/statistical-power problem, so there
+was no reason to expect genome-wide data to fix it, and it didn't.
+
+The orthogonal-sampling fix itself (`generate_orthogonal_pools.py`) was re-run against the
+genome-wide matrix and generalized from `EUR_only`-only to all 9 universes
+(`generate_orthogonal_pools_genomewide.py`) — nomination is cheap (~65s total for 18
+universe×rep combinations), so this doesn't change the simulation-cost gating above, only
+which donor lists would be ready if/when that gate opens. One real bug caught in doing this:
+the cryptic-relatedness safeguard's threshold (`70`) is meaningless on the new matrix's 1-IBS
+scale (~0.10-0.29 vs. the old Euclidean-ish ~0-150) — copying it verbatim made **every** pool
+trip the warning, which is itself the signal something's miscalibrated. Recalibrated against
+this matrix's own known-truth pairs (1,205 real parent-child pairs at D=0.1056-0.1543, whole-
+matrix 1st percentile 0.1984 — clean separation) to threshold=0.16. After recalibration, 7/36
+pools warn, all in `lowmin_highmean` specifically — the same "heavier-tailed" quadrant already
+flagged above, not a new problem. `EUR_only` (the universe with an actual pilot in flight) is
+clean.
+
+**The actual pilot question (does `highmin_lowmean` differ from `lowmin_highmean` in demux
+accuracy) is still unanswered as of this postscript** — the `EUR_only` simulation is mid-
+pipeline (pileup done, calling not yet run). Everything in this postscript is about whether the
+*construction* method still works genome-wide (it does), not about whether the underlying
+scientific question has been resolved (it hasn't).
