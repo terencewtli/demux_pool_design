@@ -14,8 +14,8 @@ Counts are pools with the output present for **both** modalities where applicabl
 | tree | stage | count | status |
 |---|---|---|---|
 | `ambisim/` (chr22 matrix) | demuxlet `.best` | 128/132 | missing: `AFR_only__greedy_maxkl__rep1`, `EUR_EAS__ancestry_balanced__rep3`, `all_3_major__ancestry_balanced__rep3`, `EUR_AFR__adversarial_mindist__rep1` |
-| `ambisim/` | scored in `01e-01h` | 128/132 | current; `RESULTS.md` is written from this run (2026-09-19) |
-| `ambisim/` | scored in `01a-01d` | 88/132 | superseded by `01e-01h`; `droplet_scores.csv` kept, not overwritten |
+| `ambisim/` | scored in `01e-01i` | 128/132 | current; `RESULTS.md` is written from this run (2026-09-19) |
+| `ambisim/` | scored in `01a-01d` | 88/132 | superseded by `01e-01i`; `droplet_scores.csv` kept, not overwritten |
 | `ambisim_n16/` (n=16) | demuxlet `.best` | 4/4 | complete; **not analyzed** (no results notebook) |
 | `ambisim_new/` (orthogonal pilot) | demuxlet `.best` | 3/4 | `EUR_only__highmin_lowmean_new__rep2` has no `.best`; **not analyzed** |
 | `ambisim_final/` (genome-wide) | pool VCFs (`A00`) | 126/126 | complete; +6 family pools symlinked from `ambisim/` |
@@ -83,9 +83,13 @@ Counts are pools with the output present for **both** modalities where applicabl
    banner makes a naive `error` grep useless).
 2. Resubmit `A02a` for the 5 pileup gaps (4 never-submitted + the GEX kill); skip-if-exists keeps
    it safe. Then `A02b` again for those.
-3. Rerun `A01b` for the 8 pools with no cr_arc output — check their A01a/A01b logs for the cause
-   first. Then `A02a` → `A02b`.
-4. Point `notebooks/ambisim/01e-01h` at `ambisim_final/` and rescore; rewrite `RESULTS.md` from
+3. Rerun `A01b` (cellranger-arc) for the 8 pools with no cr_arc output — **not submitted, not
+   running as of 2026-09-19 01:30**; those 8 stay blocked until it is. Check their A01a/A01b logs
+   for the cause first, then `A02a` → `A02b`. **Check disk first:** `/u/project/cluo` is at
+   **99%** (10 T free of 546 T) and a cr_arc pipestance is ~83 GB/pool before BAM cleanup, so 8
+   pools is ~660 GB. Stage them, and run `pool_design/tmp.sh`-style BAM cleanup on
+   demuxlet-complete pools before starting.
+4. Point `notebooks/ambisim/01e-01i` at `ambisim_final/` and rescore; rewrite `RESULTS.md` from
    that run (genome-wide numbers replace chr22 ones). `01e` has a `tree` variable; the pool
    list path also needs pointing at `ambisim/txt/pool_experiments_final126.txt`.
 
@@ -108,9 +112,14 @@ Counts are pools with the output present for **both** modalities where applicabl
    (n=3 per arm; `RESULTS.md` §6 is directionally clear but thin).
 6. Eyes-on check of the 7 relatedness-flagged genome-wide orthogonal pools before any are
    simulated.
-7. **Dropped:** the read-downsampling stress test (was #2). The natural low-coverage tail already
+7. **Dropped:** a relatedness-gradient simulation (half-sibs / avuncular / cousins). `01i` puts
+   all 994 donors on one nearest-pool-mate axis over which the error rate runs 4.1 -> 36.5 per
+   10,000 monotonically, with the parent-offspring pairs at the bottom of the *same* curve. New
+   degrees would interpolate between measured points. `RESULTS.md` §7 is the figure that answers
+   a reviewer asking for the gradient.
+8. **Dropped:** the read-downsampling stress test (was #2). The natural low-coverage tail already
    answers it — among ordinary pools `mean_dist` predicts accuracy in no coverage stratum, and
    projecting a 33x margin shrink through the shared §3 curve leaves mean donor accuracy above
    0.993. It would sharpen §6 (relatives), not rescue §1. Not worth the compute.
-8. Unresolved, low priority: `greedy_maxkl` root cause; why ATAC's singlet call tracks `mean_dist`
+9. Unresolved, low priority: `greedy_maxkl` root cause; why ATAC's singlet call tracks `mean_dist`
    (ρ=+0.450) while GEX's does not (ρ=−0.148) — `RESULTS.md` §5.

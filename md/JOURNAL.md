@@ -33,6 +33,7 @@ Labels: **[verified]** = rechecked directly against data, with the check describ
 | Family pools lose accuracy and margin | [verified] | 6 pools; ancestry-matched 2.9x on wrong-donor rate |
 | Family-pool deficit is localized to the related donors | [verified] | rechecked 2026-09-19 against the full pedigree: 36.6 vs 8.0 wrong donors/10k within the same pools; 62.7% of wrong calls name a first-degree relative |
 | Relatedness tested is parent-offspring only (~0.5 IBD), n=3 pedigrees | [verified] | CEPH 1420/1463/1362, each a couple + all four parents; no sibs, no second-degree, no gradient |
+| Relatedness is the bottom of one continuous nearest-pool-mate curve, not a separate mode | [verified] | 994 donor-level points, monotone over a 9x error range, no discontinuity at the related donors (`01i`) |
 | `adversarial_mindist` has a weaker accuracy/margin deficit | [reported] | 9 pools, small effect; thin |
 | **Design's margin benefit fades with ambient RNA** | **[retracted]** | true of the doublet margin only; on `sng_gap` it is flat (rho=+0.71/+0.72/+0.72/+0.71 GEX across ambient bins) (2026-09-19) |
 | Multi-ancestry universes show the strongest margin signal (r≈0.56–0.59) | [reported] | n=29; thin |
@@ -107,12 +108,17 @@ first-degree relative), confirming the 2026-09-14 claim. An intermediate version
 hardcoded one pedigree and so mislabelled reps 2 and 3 as unrelated, which briefly inverted the
 result; relatedness is now derived from the pedigree file per pool.
 
-**Changed on the status board:** one retraction ("margin benefit fades with ambient"), one claim reworded from "LL-gap" to "doublet margin", six
-new findings, one open question closed (downsampling), one added as the new top priority (the
-real-data doublet test).
+(7) Scoring per donor rather than per pool puts all 994 donors on one axis — distance to nearest
+pool-mate — over which the error rate moves monotonically from 4.1 to 36.5 per 10,000 with the
+related donors at the bottom of the *same* curve. A relatedness-gradient simulation would
+interpolate between measured points, so it is not worth running (`01i`).
+
+**Changed on the status board:** one retraction ("margin benefit fades with ambient"), one claim
+reworded from "LL-gap" to "doublet margin", seven new findings, one open question closed
+(downsampling), one added as the new top priority (the real-data doublet test).
 
 **Next:** `PROGRESS.md` → Next steps, analyses 1 (real-data doublet test) and operational 1
-(let 14809580 finish).
+(let 14809580 finish). Writing can start on `RESULTS.md` §1/§3/§5/§7 without further simulation.
 
 ### 2026-09-18 — docs restructured; `ambisim_final/` pileups checked
 

@@ -64,7 +64,7 @@ On `sng_gap`, ordinary pools, n=105 (Pearson / Spearman):
 
 `mean_dist` is roughly twice `min_dist`, and the relationship is identical in every coverage bin
 (ρ=+0.69 to +0.74 from <1,000 to >8,000 informative SNPs) — a uniform multiplicative scaling, not
-something concentrated in weak droplets. **Caveat (§6): `greedy_maxmin` and `greedy_maxmean`
+something concentrated in weak droplets. **Caveat (§9): `greedy_maxmin` and `greedy_maxmean`
 share 5–6/8 donors, so "mean beats min" needs `ambisim_new/` to be clean.**
 
 ## 3. The margin converts to accuracy only below a threshold, and pools sit above it
@@ -126,7 +126,7 @@ composition changes where demuxlet draws the singlet/doublet line, not how often
 Mechanistically this is close to expected — a mixture of two similar donors should resemble one
 donor. What is new is the sign relative to the singlet metric, which is what dissolves §1's null.
 
-## 6. Real relatives: a pool-wide cost, not a localized one
+## 6. Real relatives: a large cost, concentrated on the related donors
 
 Ancestry-matched (the family arms are EUR, so the all-universe ordinary mean is the wrong
 control — it inflated this to 3.4x in an earlier pass), GEX:
@@ -174,7 +174,34 @@ check before pooling is cheap and worth doing; the cost of missing one is not ca
 `adversarial_mindist` (17 pools, unrelated, worst-case-selected) shows a weaker version:
 `sng_gap` 65.9 vs 72.3, 12.0 wrong donors/10k vs 8.8, 1,530 total bad vs 1,477.
 
-## 7. Mixing ancestries gives distance room to matter
+## 7. Relatedness is the bottom of one continuous curve, not a separate failure mode
+
+Every section above collapses 8 donors into one pool-level number, which hides the fact that
+donors in a pool are not equally exposed — only the ones with a close pool-mate are. Scoring
+**per donor** instead gives 994 points on a single continuous axis: the distance from that donor
+to its nearest pool-mate (GEX, `01i`).
+
+| distance to nearest pool-mate | donors | sng_gap | wrong donor /10k |
+|---|---|---|---|
+| ≤80 *(the parent–offspring pairs)* | 36 | 38.9 | **36.5** |
+| 80–90 | 20 | 54.6 | 18.2 |
+| 90–100 | 137 | 63.0 | 14.0 |
+| 100–105 | 260 | 69.1 | 9.5 |
+| 105–110 | 228 | 73.4 | 8.2 |
+| 110–115 | 179 | 75.1 | 8.0 |
+| 115–120 | 91 | 79.4 | 6.4 |
+| >120 | 43 | 83.9 | 4.1 |
+
+Monotone across a 9x range, and **the related donors sit at the bottom of the same curve** — no
+discontinuity where relatedness begins. Among unrelated donors alone the axis still works
+(nn_dist ~ `sng_gap` ρ=+0.597, ~ error rate ρ=−0.209).
+
+**Consequence for experimental design of this project:** a relatedness-gradient simulation
+(half-sibs, avuncular, cousins) would interpolate between points already measured rather than
+test a new mechanism. The curve brackets them. This is the figure to answer a reviewer asking
+for the gradient, not a reason to run one.
+
+## 8. Mixing ancestries gives distance room to matter
 
 - Per single-ancestry universe (n=8–10 pools each): noisy, sign-inconsistent — underpowered.
 - Multi-ancestry universes span a much wider `min_dist` range (16.5–24.8 vs 9.4–16.1), which is
@@ -183,7 +210,7 @@ check before pooling is cheap and worth doing; the cost of missing one is not ca
 Restricting to one ancestry (as real-data comparisons do) removes power rather than sharpening
 signal.
 
-## 8. Min vs mean distance cannot be separated with the current strategies
+## 9. Min vs mean distance cannot be separated with the current strategies
 
 `greedy_maxmin` and `greedy_maxmean` pick a median 5–6/8 identical donors per universe/rep:
 
@@ -209,7 +236,9 @@ every depth and ambient level), but the margin is ~3x above the threshold where 
 accuracy, so the payoff is **~8 cells per 10,000**. Avoiding close relatives is worth ~148 droplets per
 10,000 pool-wide — but the cost is concentrated: for the affected donors themselves it is 36.6 vs
 8.0 wrong calls per 10,000, a 4.6x hit that their pool-mates do not share. That is a screening
-decision, not an optimization one, and only parent-offspring (~0.5 IBD) has been tested.
+decision, not an optimization one, and only parent-offspring (~0.5 IBD) has been tested —
+though §7 shows relatedness is the low end of a continuous nearest-pool-mate axis rather than a
+distinct mode, which is what makes the untested degrees predictable.
 
 The finding worth building on is §5: pool composition shifts demuxlet's singlet/doublet operating
 point, with closer pools systematically under-calling doublets (ρ=+0.60, confirmed within-pool).
@@ -228,4 +257,5 @@ the real data that sequencing depth cannot explain — see `PROGRESS.md` → Nex
 | relatedness, ancestry-matched | `results/family_ancestry_matched.csv` |
 | full cell accounting per 10,000 droplets | `results/cell_accounting_per10k.csv` |
 | coverage-matched design effect | `results/coverage_matched_design_allmetrics.csv` |
+| donor-level relatedness gradient | `results/donor_nn_distance_gradient.csv`, `results/donor_nn_distance_binned.csv` |
 | nominated donor lists (chr22 matrix) | `results/nominated_pools_n8.tsv` |
